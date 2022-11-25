@@ -14,7 +14,7 @@ app.post("/users", (req, res) => {
   };
   users.push(user);
 
-  let userToShow = user;
+  let userToShow = { ...user };
   delete userToShow.password;
 
   return res.status(201).json(userToShow);
