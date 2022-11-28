@@ -22,10 +22,21 @@ const ensureAuthMiddleware = (req, res, next) => {
       return res.status(401).json({ message: "Missing authorization headers" });
     }
 
+    req.isAdm = decoded.isAdm;
     req.requestUser = decoded.sub;
 
     return next();
   });
+};
+
+const ensureAdmMiddleware = (req, res, next) => {
+  if (!req.isAdm) {
+    return res.status(403).json({
+      message: "missing admin permissions",
+    });
+  }
+
+  next();
 };
 
 //services
@@ -67,27 +78,12 @@ const createSessionService = async ({ email, password }) => {
     ];
   }
 
-  const token = jwt.sign({}, "SECRET_KEY", {
+  const token = jwt.sign({ isAdm: foundUser.isAdm }, "SECRET_KEY", {
     expiresIn: "24h",
     subject: foundUser.uuid,
   });
 
   return [200, { token }];
-};
-
-const listUsersService = (requestUser) => {
-  const foundUser = users.find((user) => user.uuid === requestUser);
-
-  if (!foundUser.isAdm) {
-    return [
-      403,
-      {
-        message: "missing admin permissions",
-      },
-    ];
-  }
-
-  return [200, users];
 };
 
 const retrieveUserService = (requestUser) => {
@@ -153,13 +149,6 @@ const deleteUserService = (userId, requestUser) => {
 
     return [204, {}];
   }
-
-  return [
-    403,
-    {
-      message: "missing admin permissions",
-    },
-  ];
 };
 
 //controllers
@@ -176,9 +165,7 @@ const createSessionController = async (req, res) => {
 };
 
 const listUsersController = (req, res) => {
-  const [status, data] = listUsersService(req.requestUser);
-
-  return res.status(status).json(data);
+  return res.status(200).json(users);
 };
 
 const retrieveUserController = (req, res) => {
@@ -206,10 +193,20 @@ const deleteUserController = (req, res) => {
 //routes
 app.post("/users", createUserController);
 app.post("/login", createSessionController);
-app.get("/users", ensureAuthMiddleware, listUsersController);
+app.get(
+  "/users",
+  ensureAuthMiddleware,
+  ensureAdmMiddleware,
+  listUsersController
+);
 app.get("/users/profile", ensureAuthMiddleware, retrieveUserController);
 app.patch("/users/:id", ensureAuthMiddleware, updateUserController);
-app.delete("/users/:id", ensureAuthMiddleware, deleteUserController);
+app.delete(
+  "/users/:id",
+  ensureAuthMiddleware,
+  ensureAdmMiddleware,
+  deleteUserController
+);
 
 app.listen(3000, () => {
   console.log("Server running in port 3000");
