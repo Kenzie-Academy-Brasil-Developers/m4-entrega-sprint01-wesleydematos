@@ -66,6 +66,18 @@ const listUsersService = (authorization) => {
       return [401, { message: "Missing authorization headers" }];
     }
 
+    const userId = decoded.sub;
+    const foundUser = users.find((user) => user.uuid === userId);
+
+    if (!foundUser.isAdm) {
+      return [
+        403,
+        {
+          message: "missing admin permissions",
+        },
+      ];
+    }
+
     return [200, users];
   });
 };
@@ -87,7 +99,59 @@ const retrieveUserService = (authorization) => {
     return [200, foudUserToShow];
   });
 };
-const updateUserService = (userId) => {};
+const updateUserService = async (body, userId, authorization) => {
+  // body.password = await hash(body.password, 10);
+  // uuid: uuidv4(),
+
+  if (!authorization) {
+    return [401, { message: "Missing authorization headers" }];
+  }
+
+  authorization = authorization.split(" ")[1];
+
+  return jwt.verify(authorization, "SECRET_KEY", (error, decoded) => {
+    if (error) {
+      return [401, { message: "Missing authorization headers" }];
+    }
+    const foundAdm = users.find((user) => user.uuid === decoded.sub);
+    const foundUser = users.find((user) => user.uuid === userId);
+    const foundIndex = users.findIndex((user) => user.uuid === userId);
+
+    if (decoded.sub === userId && !foundAdm.isAdm) {
+      body.updatedOn = new Date();
+      body.createdOn = foundUser.createdOn;
+      body.email = foundUser.email;
+      body.isAdm = foundUser.isAdm;
+      body.uuid = foundUser.uuid;
+      users.splice(foundIndex, 1, body);
+      delete body.password;
+
+      return [200, body];
+    }
+
+    if (!foundAdm.isAdm) {
+      return [
+        403,
+        {
+          message: "missing admin permissions",
+        },
+      ];
+    }
+
+    if (!foundUser) {
+      return [
+        404,
+        {
+          message: "User not found!",
+        },
+      ];
+    }
+
+    body.updatedOn = new Date();
+    users.splice(foundIndex, 1, body);
+    return [200, body];
+  });
+};
 
 const deleteUserService = (userId, authorization) => {
   if (!authorization) {
@@ -100,22 +164,27 @@ const deleteUserService = (userId, authorization) => {
     if (error) {
       return [401, { message: "Missing authorization headers" }];
     }
+    const foundIndex = users.findIndex((user) => user.uuid === userId);
+    const userRequest = users.find((user) => user.uuid === decoded.sub);
 
-    const foundUser = users.find((user) => user.uuid === userId);
+    if (userId === decoded.sub) {
+      users.splice(foundIndex, 1);
 
-    if (!foundUser) {
-      return [
-        404,
-        {
-          message: "User not found!",
-        },
-      ];
+      return [204, {}];
     }
 
-    const index = users.findIndex((user) => user.uuid === userId);
-    users.splice(index, 1);
+    if (userRequest.isAdm) {
+      users.splice(foundIndex, 1);
 
-    return [204, {}];
+      return [204, {}];
+    }
+
+    return [
+      403,
+      {
+        message: "missing admin permissions",
+      },
+    ];
   });
 };
 
@@ -146,7 +215,15 @@ const retrieveUserController = (req, res) => {
   return res.status(status).json(data);
 };
 
-const updateUserController = (req, res) => {};
+const updateUserController = async (req, res) => {
+  const [status, data] = await updateUserService(
+    req.body,
+    req.params.id,
+    req.headers.authorization
+  );
+
+  return res.status(status).json(data);
+};
 
 const deleteUserController = (req, res) => {
   const [status, data] = deleteUserService(
