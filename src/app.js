@@ -39,6 +39,20 @@ const ensureAdmMiddleware = (req, res, next) => {
   next();
 };
 
+const ensureYourselfOrAdmMiddleware = (req, res, next) => {
+  const isRequestUserAdm = req.isAdm;
+  const idRequestUser = req.requestUser;
+  const idForExecution = req.params.id;
+
+  if (!isRequestUserAdm && idRequestUser !== idForExecution) {
+    return res.status(403).json({
+      message: "missing admin permissions",
+    });
+  }
+
+  next();
+};
+
 //services
 const createUserService = async (userData) => {
   let user = {
@@ -105,6 +119,7 @@ const updateUserService = async (body, userId, requestUser) => {
     body.email = foundUser.email;
     body.isAdm = foundUser.isAdm;
     body.uuid = foundUser.uuid;
+    // alterar so as chaves que forem distintas sem exluir o corpo anterior
     users.splice(foundIndex, 1, body);
     delete body.password;
 
@@ -200,11 +215,16 @@ app.get(
   listUsersController
 );
 app.get("/users/profile", ensureAuthMiddleware, retrieveUserController);
-app.patch("/users/:id", ensureAuthMiddleware, updateUserController);
+app.patch(
+  "/users/:id",
+  ensureAuthMiddleware,
+  ensureYourselfOrAdmMiddleware,
+  updateUserController
+);
 app.delete(
   "/users/:id",
   ensureAuthMiddleware,
-  ensureAdmMiddleware,
+  ensureYourselfOrAdmMiddleware,
   deleteUserController
 );
 
