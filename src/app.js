@@ -113,17 +113,21 @@ const updateUserService = async (body, userId, requestUser) => {
   const foundUser = users.find((user) => user.uuid === userId);
   const foundIndex = users.findIndex((user) => user.uuid === userId);
 
-  if (requestUser === userId && !foundAdm.isAdm) {
-    body.updatedOn = new Date();
-    body.createdOn = foundUser.createdOn;
-    body.email = foundUser.email;
-    body.isAdm = foundUser.isAdm;
-    body.uuid = foundUser.uuid;
-    // alterar so as chaves que forem distintas sem exluir o corpo anterior
-    users.splice(foundIndex, 1, body);
-    delete body.password;
+  const { uuid, name, email, isAdm, createdOn, password } = foundUser;
 
-    return [200, body];
+  if (requestUser === userId && !foundAdm.isAdm) {
+    const data = {
+      uuid: uuid,
+      name: body.name ? body.name : name,
+      email: body.email ? body.email : email,
+      isAdm: isAdm,
+      createdOn: createdOn,
+      updatedOn: new Date(),
+    };
+
+    users.splice(foundIndex, 1, { ...data, password });
+
+    return [200, data];
   }
 
   if (!foundAdm.isAdm) {
@@ -144,9 +148,20 @@ const updateUserService = async (body, userId, requestUser) => {
     ];
   }
 
-  body.updatedOn = new Date();
-  users.splice(foundIndex, 1, body);
-  return [200, body];
+  if (foundAdm.isAdm) {
+    const data = {
+      uuid: uuid,
+      name: body.name ? body.name : name,
+      email: body.email ? body.email : email,
+      isAdm: isAdm,
+      createdOn: createdOn,
+      updatedOn: new Date(),
+    };
+
+    users.splice(foundIndex, 1, { ...data, password });
+
+    return [200, data];
+  }
 };
 
 const deleteUserService = (userId, requestUser) => {
