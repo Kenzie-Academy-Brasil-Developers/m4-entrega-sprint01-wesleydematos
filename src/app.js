@@ -108,12 +108,12 @@ const retrieveUserService = (requestUser) => {
   return [200, foudUserToShow];
 };
 
-const updateUserService = async (body, userId, requestUser) => {
+const updateUserService = (body, userId, requestUser) => {
   const foundAdm = users.find((user) => user.uuid === requestUser);
   const foundUser = users.find((user) => user.uuid === userId);
   const foundIndex = users.findIndex((user) => user.uuid === userId);
 
-  const { uuid, name, email, isAdm, createdOn, password } = foundUser;
+  const { name, email, password, isAdm, uuid, createdOn } = foundUser;
 
   if (requestUser === userId && !foundAdm.isAdm) {
     const data = {
@@ -204,8 +204,8 @@ const retrieveUserController = (req, res) => {
   return res.status(status).json(data);
 };
 
-const updateUserController = async (req, res) => {
-  const [status, data] = await updateUserService(
+const updateUserController = (req, res) => {
+  const [status, data] = updateUserService(
     req.body,
     req.params.id,
     req.requestUser
