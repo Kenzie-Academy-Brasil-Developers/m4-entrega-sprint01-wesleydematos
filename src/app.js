@@ -1,5 +1,4 @@
 import express from "express";
-
 import { createUserController } from "./controllers/users/createUserController";
 import { createSessionController } from "./controllers/login/createSessionController";
 import { listUsersController } from "./controllers/users/listUserController";
