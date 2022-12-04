@@ -1,50 +1,21 @@
 import users from "../../database";
+import { hash } from "bcryptjs";
 
-export const updateUserService = (body, idUserToUpdate, idRequestUser) => {
-  const foundAdm = users.find((user) => user.uuid === idRequestUser);
-  const userToUpdate = users.find((user) => user.uuid === idUserToUpdate);
+export const updateUserService = async (body, idUserToUpdate) => {
   const indexUserToUpdate = users.findIndex(
     (user) => user.uuid === idUserToUpdate
   );
 
-  const { name, email, password, isAdm, uuid, createdOn } = userToUpdate;
-
-  if (idRequestUser === idUserToUpdate) {
-    const data = {
-      uuid: uuid,
-      name: body.name ? body.name : name,
-      email: body.email ? body.email : email,
-      isAdm: isAdm,
-      createdOn: createdOn,
-      updatedOn: new Date(),
-    };
-
-    users.splice(indexUserToUpdate, 1, { ...data, password });
-
-    return [200, data];
+  if (body.password) {
+    body.password = await hash(body.password, 10);
   }
 
-  if (!userToUpdate) {
-    return [
-      404,
-      {
-        message: "User not found!",
-      },
-    ];
-  }
+  users[indexUserToUpdate] = {
+    ...users[indexUserToUpdate],
+    ...body,
+  };
 
-  if (foundAdm.isAdm) {
-    const data = {
-      uuid: uuid,
-      name: body.name ? body.name : name,
-      email: body.email ? body.email : email,
-      isAdm: isAdm,
-      createdOn: createdOn,
-      updatedOn: new Date(),
-    };
+  const { password, ...userWithoutPassword } = users[indexUserToUpdate];
 
-    users.splice(indexUserToUpdate, 1, { ...data, password });
-
-    return [200, data];
-  }
+  return [200, userWithoutPassword];
 };
