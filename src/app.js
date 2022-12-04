@@ -1,224 +1,16 @@
 import express from "express";
-import users from "./database";
-import { v4 as uuidv4 } from "uuid";
-import { hash, compare } from "bcryptjs";
-import jwt from "jsonwebtoken";
+
+import { createUserController } from "./controllers/users/createUserController";
+import { createSessionController } from "./controllers/login/createSessionController";
+import { listUsersController } from "./controllers/users/listUserController";
+import { retrieveUserController } from "./controllers/users/retrieveUserController";
+import { updateUserController } from "./controllers/users/updateUserController";
+import { deleteUserController } from "./controllers/users/deleteUserController";
+import { ensureAuthMiddleware } from "./middlewares/ensureAuthMiddleware";
+import { ensureYourselfOrAdmMiddleware } from "./middlewares/ensureYourselfOrAdmMiddleware";
 
 const app = express();
 app.use(express.json());
-
-//middlewares
-const ensureAuthMiddleware = (req, res, next) => {
-  let authorization = req.headers.authorization;
-
-  if (!authorization) {
-    return res.status(401).json({ message: "Missing authorization headers" });
-  }
-
-  authorization = authorization.split(" ")[1];
-
-  return jwt.verify(authorization, "SECRET_KEY", (error, decoded) => {
-    if (error) {
-      return res.status(401).json({ message: "Missing authorization headers" });
-    }
-
-    req.isAdm = decoded.isAdm;
-    req.requestUser = decoded.sub;
-
-    return next();
-  });
-};
-
-const ensureAdmMiddleware = (req, res, next) => {
-  if (!req.isAdm) {
-    return res.status(403).json({
-      message: "missing admin permissions",
-    });
-  }
-
-  next();
-};
-
-const ensureYourselfOrAdmMiddleware = (req, res, next) => {
-  const isRequestUserAdm = req.isAdm;
-  const idRequestUser = req.requestUser;
-  const idForExecution = req.params.id;
-
-  if (!isRequestUserAdm && idRequestUser !== idForExecution) {
-    return res.status(403).json({
-      message: "missing admin permissions",
-    });
-  }
-
-  next();
-};
-
-//services
-const createUserService = async (userData) => {
-  let user = {
-    ...userData,
-    password: await hash(userData.password, 10),
-    createdOn: new Date(),
-    updatedOn: new Date(),
-    uuid: uuidv4(),
-  };
-
-  const userExists = users.find((el) => {
-    return el.email == userData.email;
-  });
-
-  if (userExists) {
-    return [409, { message: "user already exists" }];
-  }
-
-  users.push(user);
-
-  let userToShow = { ...user };
-  delete userToShow.password;
-
-  return [201, userToShow];
-};
-
-const createSessionService = async ({ email, password }) => {
-  const foundUser = users.find((user) => user.email === email);
-  const passwordMatch = await compare(password, foundUser.password);
-
-  if (!foundUser || !passwordMatch) {
-    return [
-      401,
-      {
-        message: "Wrong email/password",
-      },
-    ];
-  }
-
-  const token = jwt.sign({ isAdm: foundUser.isAdm }, "SECRET_KEY", {
-    expiresIn: "24h",
-    subject: foundUser.uuid,
-  });
-
-  return [200, { token }];
-};
-
-const retrieveUserService = (requestUser) => {
-  const foundUser = users.find((user) => user.uuid === requestUser);
-  const foudUserToShow = { ...foundUser };
-  delete foudUserToShow.password;
-
-  return [200, foudUserToShow];
-};
-
-const updateUserService = (body, userId, requestUser) => {
-  const foundAdm = users.find((user) => user.uuid === requestUser);
-  const foundUser = users.find((user) => user.uuid === userId);
-  const foundIndex = users.findIndex((user) => user.uuid === userId);
-
-  const { name, email, password, isAdm, uuid, createdOn } = foundUser;
-
-  if (requestUser === userId && !foundAdm.isAdm) {
-    const data = {
-      uuid: uuid,
-      name: body.name ? body.name : name,
-      email: body.email ? body.email : email,
-      isAdm: isAdm,
-      createdOn: createdOn,
-      updatedOn: new Date(),
-    };
-
-    users.splice(foundIndex, 1, { ...data, password });
-
-    return [200, data];
-  }
-
-  if (!foundAdm.isAdm) {
-    return [
-      403,
-      {
-        message: "missing admin permissions",
-      },
-    ];
-  }
-
-  if (!foundUser) {
-    return [
-      404,
-      {
-        message: "User not found!",
-      },
-    ];
-  }
-
-  if (foundAdm.isAdm) {
-    const data = {
-      uuid: uuid,
-      name: body.name ? body.name : name,
-      email: body.email ? body.email : email,
-      isAdm: isAdm,
-      createdOn: createdOn,
-      updatedOn: new Date(),
-    };
-
-    users.splice(foundIndex, 1, { ...data, password });
-
-    return [200, data];
-  }
-};
-
-const deleteUserService = (userId, requestUser) => {
-  const foundIndex = users.findIndex((user) => user.uuid === userId);
-  const userRequest = users.find((user) => user.uuid === requestUser);
-
-  if (userId === requestUser) {
-    users.splice(foundIndex, 1);
-
-    return [204, {}];
-  }
-
-  if (userRequest.isAdm) {
-    users.splice(foundIndex, 1);
-
-    return [204, {}];
-  }
-};
-
-//controllers
-const createUserController = async (req, res) => {
-  const [status, data] = await createUserService(req.body);
-
-  return res.status(status).json(data);
-};
-
-const createSessionController = async (req, res) => {
-  const [status, data] = await createSessionService(req.body);
-
-  return res.status(status).json(data);
-};
-
-const listUsersController = (req, res) => {
-  return res.status(200).json(users);
-};
-
-const retrieveUserController = (req, res) => {
-  const [status, data] = retrieveUserService(req.requestUser);
-
-  return res.status(status).json(data);
-};
-
-const updateUserController = (req, res) => {
-  const [status, data] = updateUserService(
-    req.body,
-    req.params.id,
-    req.requestUser
-  );
-
-  return res.status(status).json(data);
-};
-
-const deleteUserController = (req, res) => {
-  const [status, data] = deleteUserService(req.params.id, req.requestUser);
-
-  return res.status(status).json(data);
-};
 
 //routes
 app.post("/users", createUserController);
@@ -226,7 +18,7 @@ app.post("/login", createSessionController);
 app.get(
   "/users",
   ensureAuthMiddleware,
-  ensureAdmMiddleware,
+  ensureYourselfOrAdmMiddleware,
   listUsersController
 );
 app.get("/users/profile", ensureAuthMiddleware, retrieveUserController);
@@ -242,9 +34,5 @@ app.delete(
   ensureYourselfOrAdmMiddleware,
   deleteUserController
 );
-
-app.listen(3000, () => {
-  console.log("Server running in port 3000");
-});
 
 export default app;
